@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Escape.vim</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧠</text></svg>" />
+    <style>
+        body {
+            background-color: #1e1e2e;
+            color: #cdd6f4;
+            font-family: monospace, "Fira Code", "Courier New";
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            /* overflow: hidden; /* 스크롤바 방지는 이제 #maze에서 처리 */
+        }
+        h1 {
+            color: #89b4fa;
+            margin-bottom: 20px;
+        }
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            /* game-container가 화면의 대부분을 차지하도록 설정 */
+            max-width: 95vw; 
+            max-height: 95vh;
+            justify-content: center; /* 내부 요소를 중앙 정렬 */
+        }
+        #maze {
+            white-space: pre;
+            background: #181825;
+            padding: 10px; 
+            border: 2px solid #89b4fa; 
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+            box-sizing: border-box; 
+            transition: width 0.3s ease, height 0.3s ease, font-size 0.3s ease; /* 폰트 크기 변경 시에도 부드럽게 */
+            
+            /* 핵심 수정: 미로 자체의 최대 너비/높이를 유연하게 설정 */
+            /* 폰트 크기에 따라 미로 자체의 width/height가 조절될 것임 */
+            /* 여기서 max-width/height는 전체 화면에 대한 제한이 아니라, 
+               혹시라도 계산된 값이 화면을 넘칠 때 fallback 역할 */
+            overflow: auto; /* 내용이 넘치면 스크롤바 자동 생성 */
+            flex-grow: 1; /* 남은 공간을 차지하도록 유연하게 늘어남 */
+            display: flex; /* 내부 텍스트 중앙 정렬을 위해 flex 사용 */
+            align-items: center;
+            justify-content: center;
+            text-align: left; /* 미로 텍스트 왼쪽 정렬 */
+            line-height: 1; /* 글자 간 세로 간격 1로 고정하여 밀집도를 높임 */
+        }
+        #info {
+            font-size: 14px;
+            color: #a6adc8;
+            text-align: center;
+            white-space: nowrap; /* 정보 텍스트 줄바꿈 방지 */
+        }
+        #main-menu, #game-screen {
+            display: none; 
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #282a36;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.5);
+            /* 메인 메뉴와 게임 화면도 화면 비율에 맞춰 너무 커지지 않도록 */
+            max-width: 90vw;
+            max-height: 90vh;
+            overflow: auto;
+        }
+        #main-menu.active, #game-screen.active {
+            display: flex; 
+        }
+        .menu-button {
+            background-color: #89b4fa;
+            color: #1e1e2e;
+            border: none;
+            padding: 12px 25px;
+            margin: 10px 0;
+            border-radius: 6px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            width: 200px;
+        }
+        .menu-button:hover {
+            background-color: #74a0e8;
+        }
+        .setting-item {
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .setting-item label {
+            width: 80px;
+            text-align: right;
+            font-size: 16px;
+        }
+        .setting-item input[type="number"], .setting-item select { 
+            background-color: #3b3b4d;
+            border: 1px solid #5a5a6d;
+            color: #cdd6f4;
+            padding: 8px;
+            border-radius: 4px;
+            width: 60px;
+            text-align: center;
+            font-size: 16px;
+        }
+        .setting-item select {
+            width: 100px; 
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1 data-key="gameTitle">🧠 Escape.vim</h1>
+
+    <div id="main-menu" class="active">
+        <h2 data-key="mainMenuTitle">메인 메뉴</h2>
+        <div class="setting-item">
+            <label for="language-select" data-key="languageLabel">언어:</label>
+            <select id="language-select">
+                <option value="ko">한국어</option>
+                <option value="en">English</option>
+            </select>
+        </div>
+        <div class="setting-item">
+            <label for="maze-width" data-key="widthLabel">너비:</label>
+            <input type="number" id="maze-width" value="31" min="15" max="101" step="2"> 
+        </div>
+        <div class="setting-item">
+            <label for="maze-height" data-key="heightLabel">높이:</label>
+            <input type="number" id="maze-height" value="21" min="15" max="101" step="2">
+        </div>
+        <div class="setting-item">
+            <label for="font-size" data-key="fontSizeLabel">폰트 크기:</label>
+            <input type="number" id="font-size" value="14" min="10" max="30" step="1"> 
+        </div>
+        <button class="menu-button" id="start-game-button" data-key="startGameButton">게임 시작</button>
+        <p style="font-size: 12px; color: #a6adc8;" data-key="mazeSizeHint">* 너비와 높이는 홀수로 입력해주세요! (테두리 포함)</p>
+    </div>
+
+    <div id="game-screen">
+        <div id="game-container">
+            <div id="maze"></div>
+            <div id="info" data-key="gameInfo">hjkl로 움직여 | @ = 너 | X = 출구</div>
+        </div>
+    </div>
+
+    <script>
+        let currentWidth = 31; 
+        let currentHeight = 21;
+        let currentFontSize = 14; 
+        let player = { x: 0, y: 0 }; 
+        let maze = [];
+        let level = 1;
+        let currentLanguage = "ko"; 
+
+        const mainMenu = document.getElementById("main-menu");
+        const gameScreen = document.getElementById("game-screen");
+        const startGameButton = document.getElementById("start-game-button");
+        const mazeWidthInput = document.getElementById("maze-width");
+        const mazeHeightInput = document.getElementById("maze-height");
+        const fontSizeInput = document.getElementById("font-size"); 
+        const mazeElement = document.getElementById("maze");
+        const languageSelect = document.getElementById("language-select"); 
+
+        // --- 언어 번역 데이터 ---
+        const translations = {
+            ko: {
+                gameTitle: "🧠 Escape.vim",
+                mainMenuTitle: "메인 메뉴",
+                languageLabel: "언어:",
+                widthLabel: "너비:",
+                heightLabel: "높이:",
+                fontSizeLabel: "폰트 크기:",
+                startGameButton: "게임 시작",
+                mazeSizeHint: "* 너비와 높이는 홀수로 입력해주세요! (테두리 포함)",
+                gameInfo: "hjkl로 움직여 | @ = 너 | X = 출구",
+                levelClear: "🎉 레벨 {level} 클리어!", 
+                alertPrefix: "" 
+            },
+            en: {
+                gameTitle: "🧠 Escape.vim",
+                mainMenuTitle: "Main Menu",
+                languageLabel: "Language:",
+                widthLabel: "Width:",
+                heightLabel: "Height:",
+                fontSizeLabel: "Font Size:",
+                startGameButton: "Start Game",
+                mazeSizeHint: "* Width and height must be odd numbers! (Including border)",
+                gameInfo: "Move with hjkl | @ = You | X = Exit",
+                levelClear: "🎉 Level {level} Cleared!",
+                alertPrefix: "Awesome! " 
+            }
+        };
+
+        function setLanguage(lang) {
+            currentLanguage = lang;
+            const elements = document.querySelectorAll("[data-key]"); 
+            elements.forEach(element => {
+                const key = element.getAttribute("data-key");
+                if (translations[lang] && translations[lang][key]) {
+                    element.innerText = translations[lang][key];
+                }
+            });
+        }
+
+        function createEmptyMaze(w, h) {
+            const m = Array.from({ length: h }, (_, y) =>
+                Array.from({ length: w }, (_, x) => '#')
+            );
+            for (let y = 1; y < h - 1; y++) {
+                for (let x = 1; x < w - 1; x++) {
+                    m[y][x] = '#'; 
+                }
+            }
+            return m;
+        }
+
+        function shuffle(arr) {
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        function generatePrimMaze(w, h) {
+            const m = createEmptyMaze(w, h);
+            
+            let startX = 1; 
+            let startY = 1; 
+
+            m[startY][startX] = ' ';
+            const walls = [];
+
+            const directions = [[0, -1], [0, 1], [-1, 0], [1, 0]]; 
+            for (const [dx, dy] of directions) {
+                const wx = startX + dx; 
+                const wy = startY + dy; 
+                if (wy > 0 && wy < h - 1 && wx > 0 && wx < w - 1 && m[wy][wx] === '#') {
+                    walls.push({ x: wx, y: wy });
+                }
+            }
+
+            while (walls.length > 0) {
+                const randomIndex = Math.floor(Math.random() * walls.length);
+                const wall = walls.splice(randomIndex, 1)[0]; 
+
+                let cx = wall.x; 
+                let cy = wall.y; 
+
+                let nx, ny;
+                
+                let connectedToPath = false;
+                for (const [dx, dy] of directions) {
+                    const px = cx + dx; 
+                    const py = cy + dy;
+
+                    if (py > 0 && py < h - 1 && px > 0 && px < w - 1 && m[py][px] === ' ') {
+                        nx = cx + (cx - px); 
+                        ny = cy + (cy - py);
+                        connectedToPath = true;
+                        break;
+                    }
+                }
+
+                if (connectedToPath && ny > 0 && ny < h - 1 && nx > 0 && nx < w - 1 && m[ny][nx] === '#') {
+                    m[cy][cx] = ' '; 
+                    m[ny][nx] = ' '; 
+
+                    for (const [dx, dy] of directions) {
+                        const newWallX = nx + dx;
+                        const newWallY = ny + dy;
+                        if (newWallY > 0 && newWallY < h - 1 && newWallX > 0 && newWallX < w - 1 && 
+                            m[newWallY][newWallX] === '#' && 
+                            !walls.some(wall => wall.x === newWallX && wall.y === newWallY)) {
+                            walls.push({ x: newWallX, y: newWallY });
+                        }
+                    }
+                }
+            }
+            
+            return m;
+        }
+
+        function drawMaze() {
+            const view = maze.map((row, y) =>
+                row.map((ch, x) => (x === player.x && y === player.y ? '@' : ch)).join('')
+            ).join('\n');
+            mazeElement.innerText = view;
+
+            mazeElement.style.fontFamily = 'monospace';
+            mazeElement.style.fontSize = `${currentFontSize}px`;
+            // line-height를 1로 고정하여 텍스트가 위아래로 너무 벌어지지 않게 합니다.
+            mazeElement.style.lineHeight = `1`; 
+
+            // CSS의 flexbox와 max-width/height에 맡겨서 동적으로 크기 조절되도록 합니다.
+            // 여기서는 미로의 실제 문자열 길이에 따라 너비를 맞춥니다.
+            mazeElement.style.width = 'auto'; // CSS가 조절하도록 auto로 설정
+            mazeElement.style.height = 'auto'; // CSS가 조절하도록 auto로 설정
+        }
+
+        // 새로운 레벨 시작 및 미로 크기 계산 로직 개선
+        function newLevel(desiredWidth, desiredHeight) {
+            // 사용자가 입력한 너비/높이 값을 기준으로 시작하되, 홀수인지 확인
+            let baseWidth = desiredWidth % 2 === 0 ? desiredWidth + 1 : desiredWidth;
+            let baseHeight = desiredHeight % 2 === 0 ? desiredHeight + 1 : desiredHeight;
+
+            // 최소 크기 보장 (15x15)
+            baseWidth = Math.max(15, baseWidth);
+            baseHeight = Math.max(15, baseHeight);
+
+            // 현재 폰트 크기 기준으로 화면에 들어갈 수 있는 최대 미로 칸 수 계산
+            // charWidth, charHeight는 monospace 폰트의 대략적인 비율 (조절 가능)
+            const charWidthRatio = 0.6; // 폰트 크기 대비 글자 너비 비율
+            const charHeightRatio = 1.1; // 폰트 크기 대비 글자 높이 비율 (line-height가 1로 바뀌어서 이 값은 덜 중요)
+
+            // 전체 게임 컨테이너가 차지할 수 있는 최대 공간 (예: 화면의 95%)
+            const maxContentWidthPx = window.innerWidth * 0.90; // 미로가 차지할 실제 픽셀 너비 (여백 고려)
+            const maxContentHeightPx = window.innerHeight * 0.70; // 미로가 차지할 실제 픽셀 높이 (제목, 버튼 등 고려)
+            
+            const paddingAndBorderWidth = (10 * 2) + (2 * 2); // 좌우 패딩+보더
+            const paddingAndBorderHeight = (10 * 2) + (2 * 2); // 상하 패딩+보더
+
+            // 폰트 크기 + 패딩/보더를 뺀 순수 미로 공간에 들어갈 수 있는 최대 칸 수
+            let maxColsByScreen = Math.floor((maxContentWidthPx - paddingAndBorderWidth) / (currentFontSize * charWidthRatio));
+            let maxRowsByScreen = Math.floor((maxContentHeightPx - paddingAndBorderHeight) / (currentFontSize * charHeightRatio)); // line-height가 1이므로 charHeightRatio도 조절 고려
+
+            // 홀수 강제 (최대 칸 수도 홀수로 맞춰야 함)
+            maxColsByScreen = maxColsByScreen % 2 === 0 ? maxColsByScreen - 1 : maxColsByScreen;
+            maxRowsByScreen = maxRowsByScreen % 2 === 0 ? maxRowsByScreen - 1 : maxRowsByScreen;
+
+            // 최소 크기 (15) 보장
+            maxColsByScreen = Math.max(15, maxColsByScreen);
+            maxRowsByScreen = Math.max(15, maxRowsByScreen);
+
+
+            // 최종 미로 크기는 사용자 입력 기반 크기와 화면 최대 크기 중 작은 값
+            currentWidth = Math.min(baseWidth, maxColsByScreen);
+            currentHeight = Math.min(baseHeight, maxRowsByScreen);
+
+            // 미로 크기가 너무 작아지는 것을 방지하기 위한 추가 보정 (선택적)
+            // 예를 들어, 폰트가 너무 커서 maxColsByScreen이 15보다 작아지면 15로 고정
+            currentWidth = Math.max(15, currentWidth);
+            currentHeight = Math.max(15, currentHeight);
+            
+            // 입력 필드에 최종 적용된 값 반영 (사용자가 설정한 값은 유지하되, 실제 미로 크기는 조절됨을 시사)
+            mazeWidthInput.value = desiredWidth;
+            mazeHeightInput.value = desiredHeight;
+
+            maze = generatePrimMaze(currentWidth, currentHeight); 
+            player = { x: 1, y: 1 }; 
+            maze[currentHeight - 2][currentWidth - 2] = 'X'; 
+            
+            drawMaze(); 
+        }
+
+        document.addEventListener("keydown", e => {
+            if (!gameScreen.classList.contains('active')) return; 
+
+            let dx = 0, dy = 0; 
+
+            if (e.key === 'h') dx = -1; 
+            else if (e.key === 'l') dx = 1;  
+            else if (e.key === 'j') dy = 1;  
+            else if (e.key === 'k') dy = -1; 
+            else return; 
+
+            const nx = player.x + dx; 
+            const ny = player.y + dy; 
+
+            if (ny >= 0 && ny < maze.length && nx >= 0 && nx < maze[0].length && maze[ny][nx] !== '#') {
+                player.x = nx;
+                player.y = ny;
+
+                if (maze[ny][nx] === 'X') {
+                    const alertMsg = translations[currentLanguage].levelClear.replace("{level}", level);
+                    const alertPrefix = translations[currentLanguage].alertPrefix;
+                    alert(alertPrefix + alertMsg);
+                    level++;
+                    // 다음 레벨에서 미로 크기를 늘릴 때, 현재 사용 중인 미로 크기를 기준으로 증분
+                    newLevel(currentWidth + 4, currentHeight + 2); 
+                } else {
+                    drawMaze(); 
+                }
+            }
+        });
+
+        startGameButton.addEventListener("click", () => {
+            let widthValue = parseInt(mazeWidthInput.value);
+            let heightValue = parseInt(mazeHeightInput.value);
+            let fontSizeValue = parseInt(fontSizeInput.value);
+
+            // 폰트 크기, 너비/높이 입력값 제한은 그대로 유지 (사용자 입력 필드의 min/max)
+            currentFontSize = Math.max(10, Math.min(30, fontSizeValue)); 
+            fontSizeInput.value = currentFontSize; // 실제 적용된 폰트 크기 반영
+
+            mainMenu.classList.remove('active'); 
+            gameScreen.classList.add('active');   
+            level = 1; 
+            // 새로운 레벨 시작 시 사용자 입력 값을 기준으로 newLevel 호출
+            newLevel(widthValue, heightValue); 
+        });
+
+        languageSelect.addEventListener("change", (event) => {
+            setLanguage(event.target.value);
+        });
+
+        languageSelect.value = currentLanguage; 
+        setLanguage(currentLanguage); 
+        mainMenu.classList.add('active');
+    </script>
+</body>
+</html>
